@@ -687,21 +687,27 @@ class AIAgent:
         self.acp_args = list(acp_args or args or [])
         if api_mode in {"chat_completions", "codex_responses", "anthropic_messages"}:
             self.api_mode = api_mode
+            self._api_mode_explicit = True
         elif self.provider == "openai-codex":
             self.api_mode = "codex_responses"
+            self._api_mode_explicit = False
         elif (provider_name is None) and "chatgpt.com/backend-api/codex" in self._base_url_lower:
             self.api_mode = "codex_responses"
             self.provider = "openai-codex"
+            self._api_mode_explicit = False
         elif self.provider == "anthropic" or (provider_name is None and "api.anthropic.com" in self._base_url_lower):
             self.api_mode = "anthropic_messages"
             self.provider = "anthropic"
+            self._api_mode_explicit = False
         elif self._base_url_lower.rstrip("/").endswith("/anthropic"):
             # Third-party Anthropic-compatible endpoints (e.g. MiniMax, DashScope)
             # use a URL convention ending in /anthropic. Auto-detect these so the
             # Anthropic Messages API adapter is used instead of chat completions.
             self.api_mode = "anthropic_messages"
+            self._api_mode_explicit = False
         else:
             self.api_mode = "chat_completions"
+            self._api_mode_explicit = False
 
         try:
             from hermes_cli.model_normalize import (
@@ -721,8 +727,11 @@ class AIAgent:
         # Responses there. ACP runtimes are excluded: CopilotACPClient
         # handles its own routing and does not implement the Responses API
         # surface.
+        # Skip when api_mode was explicitly set — the user knows what
+        # their custom endpoint supports (#10473).
         if (
             self.api_mode == "chat_completions"
+            and not self._api_mode_explicit
             and self.provider != "copilot-acp"
             and not str(self.base_url or "").lower().startswith("acp://copilot")
             and not str(self.base_url or "").lower().startswith("acp+tcp://")
